@@ -1,0 +1,49 @@
+# Environment
+.env
+configs/gee_key.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Data (large files — track with DVC or similar)
+data/raw/
+data/interim/
+data/processed/
+data/external/
+data/validation/
+
+# Models (weights — deposit on Zenodo/HuggingFace separately)
+models/detection/*.pt
+models/detection/*.pth
+models/segmentation/*.pt
+models/segmentation/*.pth
+models/classification/*.pt
+models/classification/*.pth
+models/fusion/*.pkl
+models/fusion/*.joblib
+
+# Outputs (derived results — deposit on Zenodo/OSF separately)
+outputs/
+
+# Claude Code session files
+.claude/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# MLflow
+mlruns/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

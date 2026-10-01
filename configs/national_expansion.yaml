@@ -1,0 +1,69 @@
+project:
+  name: national-expansion
+  study_area: Ghana National
+  crs: EPSG:32630
+  output_crs: EPSG:4326
+
+cities:
+  - name: Accra
+    bbox: [-0.5500, 5.3500, 0.3500, 5.9000]
+  - name: Kumasi
+    bbox: [-1.8000, 6.5500, -1.4000, 6.8500]
+  - name: Tamale
+    bbox: [-0.9500, 9.3000, -0.7000, 9.5500]
+  - name: Cape Coast
+    bbox: [-1.3500, 5.0500, -1.1000, 5.2000]
+  - name: Sekondi-Takoradi
+    bbox: [-2.0000, 4.8500, -1.6000, 5.0500]
+  - name: Ho
+    bbox: [0.4000, 6.5500, 0.7000, 6.8000]
+
+sampling:
+  segment_length_m: 100
+  headings: [0, 90, 180, 270]
+  pitch: 0
+  fov: 90
+  image_size: "640x640"
+  target_points: 100000
+  target_images: 400000
+  min_streetview_date: "2018-01-01"
+
+road_classes:
+  include:
+    - motorway
+    - trunk
+    - primary
+    - secondary
+    - tertiary
+    - residential
+    - unclassified
+    - living_street
+    - service
+  exclude:
+    - footway
+    - cycleway
+    - path
+    - steps
+
+flood_risk:
+  depression_threshold_m: 2.0
+  proximity_drain_m: 100
+  proximity_waterway_m: 100
+  proximity_wetland_m: 200
+  twi_high_threshold: 8.0
+
+slfvi:
+  weights:
+    hazard: 0.30
+    exposure: 0.20
+    sensitivity: 0.35
+    adaptive_capacity: 0.15
+
+paths:
+  data_raw: data/raw
+  data_interim: data/interim
+  data_processed: data/processed
+  data_external: data/external
+  data_validation: data/validation
+  models: models
+  outputs: outputs
