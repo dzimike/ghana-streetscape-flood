@@ -1,7 +1,11 @@
-"""K-means typology clustering on segment-level EfficientNet predictions.
+"""K-means typology clustering on segment-level CLIP zero-shot predictions.
 
-Aggregates 15-label probability vectors by pano_id, runs k-means for k=2-8,
+Aggregates 15-label CLIP probability vectors by point_id, runs k-means for k=2-8,
 selects optimal k by silhouette coefficient, and saves cluster profiles.
+
+Feature source: CLIP zero-shot (OpenAI ViT-B/32, no local fine-tuning) —
+same 15 flood-indicator labels as the prior EfficientNet pipeline, now derived
+from the clean pre-trained pipeline in run_clip.py.
 
 Usage:
   python src/models/streetscape_typology.py           # auto-select optimal k
@@ -40,47 +44,47 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT    = Path(__file__).resolve().parents[2]
-PREDS   = ROOT / "data/processed/efficientnet_predictions.parquet"
+PREDS   = ROOT / "data/processed/streetscape_features.parquet"   # CLIP features
 OUT_DIR = ROOT / "outputs/tables"
 FIG_DIR = ROOT / "outputs/figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 LABEL_COLS = [
-    "enet_visible_drain_present",
-    "enet_open_gutter_present",
-    "enet_blocked_drain_present",
-    "enet_stagnant_water_visible",
-    "enet_poor_road_condition",
-    "enet_heavy_impervious_surface",
-    "enet_unpaved_shoulder",
-    "enet_informal_structure_near_drainage",
-    "enet_solid_waste_accumulation",
-    "enet_visible_waterway_or_stream",
-    "enet_low_lying_street_form",
-    "enet_roadside_erosion",
-    "enet_pedestrian_exposure",
-    "enet_culvert_or_bridge_visible",
-    "enet_no_visible_drainage",
+    "clip_visible_drain_present",
+    "clip_open_gutter_present",
+    "clip_blocked_drain_present",
+    "clip_stagnant_water_visible",
+    "clip_poor_road_condition",
+    "clip_heavy_impervious_surface",
+    "clip_unpaved_shoulder",
+    "clip_informal_structure_near_drainage",
+    "clip_solid_waste_accumulation",
+    "clip_visible_waterway_or_stream",
+    "clip_low_lying_street_form",
+    "clip_roadside_erosion",
+    "clip_pedestrian_exposure",
+    "clip_culvert_or_bridge_visible",
+    "clip_no_visible_drainage",
 ]
+VULN_COL = "streetscape_sensitivity_score"   # replaces enet_vuln_prob
 
-SHORT = {c: c.replace("enet_", "").replace("_", " ") for c in LABEL_COLS}
+SHORT = {c: c.replace("clip_", "").replace("_", " ") for c in LABEL_COLS}
 
 
 def main():
-    print("Loading predictions ...")
+    print("Loading CLIP streetscape features ...")
     df = pd.read_parquet(PREDS)
-    print(f"  {len(df):,} image-level predictions, columns: {list(df.columns)}")
+    print(f"  {len(df):,} road-segment rows, columns: {df.shape[1]}")
 
     missing = [c for c in LABEL_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing label columns: {missing}")
 
-    # Aggregate to panorama (road-point) level by averaging across headings
-    seg = (df.groupby("pano_id")[LABEL_COLS + ["enet_vuln_prob"]]
-             .mean()
-             .reset_index())
-    print(f"  {len(seg):,} unique road-segment locations after aggregation")
+    # streetscape_features.parquet is already aggregated per point_id
+    vuln_cols = LABEL_COLS + ([VULN_COL] if VULN_COL in df.columns else [])
+    seg = df[["point_id"] + vuln_cols].copy()
+    print(f"  {len(seg):,} unique road-segment locations")
 
     X  = seg[LABEL_COLS].values.astype(float)
     sc = StandardScaler()
@@ -120,14 +124,17 @@ def main():
     seg["silhouette"] = sil_vals
 
     # Cluster profiles
-    profile_cols = LABEL_COLS + ["enet_vuln_prob", "silhouette"]
+    vuln_present = VULN_COL in seg.columns
+    profile_cols = LABEL_COLS + ([VULN_COL] if vuln_present else []) + ["silhouette"]
     profile = seg.groupby("cluster")[profile_cols].mean()
     profile["n"]   = seg.groupby("cluster").size()
     profile["pct"] = (profile["n"] / len(seg) * 100).round(1)
-    profile = profile.sort_values("enet_vuln_prob", ascending=False)
+    sort_col = VULN_COL if vuln_present else LABEL_COLS[0]
+    profile = profile.sort_values(sort_col, ascending=False)
 
     print("\nCluster profiles (mean probabilities, sorted by vulnerability):")
-    print(profile[["n", "pct", "enet_vuln_prob", "silhouette"] + LABEL_COLS].round(3).to_string())
+    summary_cols = ["n", "pct"] + ([VULN_COL] if vuln_present else []) + ["silhouette"] + LABEL_COLS
+    print(profile[summary_cols].round(3).to_string())
 
     # Save
     seg.to_csv(OUT_DIR / "streetscape_typology_clusters.csv", index=False)
@@ -202,20 +209,22 @@ if __name__ == "__main__":
         import matplotlib.pyplot as plt
 
         df = pd.read_parquet(PREDS)
-        seg = (df.groupby("pano_id")[LABEL_COLS + ["enet_vuln_prob"]]
-                 .mean().reset_index())
+        vuln_present2 = VULN_COL in df.columns
+        vuln_cols2 = LABEL_COLS + ([VULN_COL] if vuln_present2 else [])
+        seg = df[["point_id"] + vuln_cols2].copy()
         X  = seg[LABEL_COLS].values.astype(float)
         sc = StandardScaler(); Xz = sc.fit_transform(X)
         km = KMeans(n_clusters=k_forced, random_state=42, n_init=50, max_iter=1000)
         seg["cluster"] = km.fit_predict(Xz) + 1
         seg["silhouette"] = silhouette_samples(Xz, km.labels_)
 
-        profile_cols = LABEL_COLS + ["enet_vuln_prob", "silhouette"]
-        prof = seg.groupby("cluster")[profile_cols].mean()
+        profile_cols2 = LABEL_COLS + ([VULN_COL] if vuln_present2 else []) + ["silhouette"]
+        prof = seg.groupby("cluster")[profile_cols2].mean()
         prof["n"]   = seg.groupby("cluster").size()
         prof["pct"] = (prof["n"] / len(seg) * 100).round(1)
-        prof = prof.sort_values("enet_vuln_prob", ascending=False)
-        print(prof[["n", "pct", "enet_vuln_prob"] + LABEL_COLS].round(3).to_string())
+        sort_col2 = VULN_COL if vuln_present2 else LABEL_COLS[0]
+        prof = prof.sort_values(sort_col2, ascending=False)
+        print(prof[["n", "pct"] + ([VULN_COL] if vuln_present2 else []) + LABEL_COLS].round(3).to_string())
 
         suffix = f"_k{k_forced}"
         seg.to_csv(OUT_DIR / f"streetscape_typology_clusters{suffix}.csv", index=False)
