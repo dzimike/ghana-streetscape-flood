@@ -1,15 +1,14 @@
-"""Clean fusion model: CLIP + SegFormer + Places365 features only — no EfficientNet.
+"""Clean fusion model: CLIP + SegFormer + Places365 + Pixel + Object features.
 
-This script reproduces the SLFVI and ML flood vulnerability predictions using
-only pre-trained, off-the-shelf models (no fine-tuning on local annotations):
-  - CLIP zero-shot scene labels  (OpenAI, 2021)
-  - SegFormer-B0 semantic segmentation  (NVIDIA, ADE20K pre-trained)
-  - WideResNet-18 Places365 scene classification  (Zhou et al., 2017)
+Pre-trained, off-the-shelf models only — no fine-tuning on local annotations:
+  - CLIP zero-shot scene labels          (OpenAI, 2021)
+  - SegFormer-B0 semantic segmentation   (NVIDIA, ADE20K pre-trained)
+  - WideResNet-18 Places365              (Zhou et al., 2017 / ZenSVI)
+  - Pixel statistics                     (PIL-based, no model)
+  - YOLOv8n object detection             (COCO pre-trained)
 
-This approach directly parallels Zhou et al. (2026) (Cities paper) and
-eliminates the evaluation contamination that arose from the teacher–student
-EfficientNet pipeline.  All three feature sources use models trained entirely
-outside this study's dataset.
+Directly parallels Zhou et al. (2026, Cities) five feature categories:
+  semantic | scene (Places365 + diversity) | pixel | object | CLIP/SegFormer
 
 Outputs:
   data/processed/vulnerability_index_v3.parquet
@@ -33,8 +32,10 @@ import pandas as pd
 from loguru import logger
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-STREETSCAPE   = ROOT / "data/processed/streetscape_features.parquet"   # CLIP + SegFormer
-PLACES365     = ROOT / "data/processed/places365_segment.parquet"       # Places365
+STREETSCAPE   = ROOT / "data/processed/streetscape_features.parquet"        # CLIP + SegFormer
+PLACES365     = ROOT / "data/processed/places365_segment.parquet"            # Places365 scene
+PIXEL_FEATS   = ROOT / "data/processed/pixel_segment.parquet"               # pixel statistics
+OBJECT_FEATS  = ROOT / "data/processed/object_detection_segment.parquet"    # YOLOv8 COCO counts
 GEOSPATIAL    = ROOT / "data/processed/geospatial_features.parquet"
 SAMPLE_PTS    = ROOT / "data/interim/sample_points.gpkg"
 
@@ -151,6 +152,74 @@ TOP_SCENE_ATTRS = [
 
 TARGET_COL = "any_flood_exposed_100m"
 
+# ── Scene diversity indices (from Places365 distribution) ────────────────────
+def add_scene_diversity(df: pd.DataFrame) -> pd.DataFrame:
+    """Add 6 scene diversity indices computed from Places365 category probabilities.
+
+    Parallels the 6 scene diversity variables in Zhou et al. (2026, Cities):
+      scene_shannon     — Shannon entropy across 365 category probs (scene richness)
+      scene_simpson     — Simpson diversity index (1 - sum(p²))
+      scene_top1_prob   — probability of the single dominant scene
+      scene_top5_share  — cumulative probability of top-5 scene categories
+      scene_outdoor_frac — fraction of probability mass in outdoor categories
+      scene_entropy_norm — scene_shannon normalised by log(365)
+    """
+    sc_cols = [c for c in df.columns if c.startswith("sc_")]
+    if not sc_cols:
+        return df
+
+    probs = df[sc_cols].fillna(0).values.astype(np.float64)
+    # Normalise rows to sum to 1 (they should already, but guard against NaN fill)
+    row_sums = probs.sum(axis=1, keepdims=True)
+    row_sums = np.where(row_sums > 0, row_sums, 1.0)
+    p = probs / row_sums
+
+    # Shannon entropy H = -sum(p * log(p))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        log_p = np.where(p > 0, np.log(p), 0.0)
+    shannon = -(p * log_p).sum(axis=1)
+
+    # Simpson = 1 - sum(p^2)
+    simpson = 1.0 - (p ** 2).sum(axis=1)
+
+    # Top-1 probability
+    top1 = p.max(axis=1)
+
+    # Top-5 cumulative probability
+    top5 = np.sort(p, axis=1)[:, -5:].sum(axis=1)
+
+    # Outdoor fraction: ZenSVI IO_places365.txt marks outdoor=1
+    # We use env_outdoor (already computed in run_places365.py) as the scalar proxy;
+    # here we compute the fraction of probability mass in columns labelled sc_*
+    # that belong to known outdoor scene categories.
+    outdoor_keywords = {
+        "street", "road", "highway", "alley", "sidewalk", "path", "yard",
+        "parking", "plaza", "market", "canal", "river", "lake", "swamp",
+        "marsh", "flood", "construction", "residential", "urban",
+    }
+    outdoor_mask = np.array([
+        any(kw in c.replace("sc_", "") for kw in outdoor_keywords)
+        for c in sc_cols
+    ])
+    outdoor_frac = p[:, outdoor_mask].sum(axis=1)
+
+    # Normalised entropy
+    entropy_norm = shannon / np.log(max(len(sc_cols), 2))
+
+    df["scene_shannon"]      = shannon
+    df["scene_simpson"]      = simpson
+    df["scene_top1_prob"]    = top1
+    df["scene_top5_share"]   = top5
+    df["scene_outdoor_frac"] = outdoor_frac
+    df["scene_entropy_norm"] = entropy_norm
+    return df
+
+
+SCENE_DIVERSITY_COLS = [
+    "scene_shannon", "scene_simpson", "scene_top1_prob",
+    "scene_top5_share", "scene_outdoor_frac", "scene_entropy_norm",
+]
+
 
 def spatial_block_cv(df: pd.DataFrame, n_blocks: int = 5) -> list[tuple]:
     df = df.copy()
@@ -215,6 +284,22 @@ def main() -> None:
     else:
         logger.warning("Places365 features not found — run run_places365.py first")
 
+    # Merge pixel features if available
+    if PIXEL_FEATS.exists():
+        pix = pd.read_parquet(PIXEL_FEATS)
+        logger.info(f"  Pixel: {pix.shape[1]-1} features for {len(pix):,} points")
+        df = df.merge(pix, on="point_id", how="left")
+    else:
+        logger.warning("Pixel features not found — run run_pixel_features.py first")
+
+    # Merge object detection features if available
+    if OBJECT_FEATS.exists():
+        obj = pd.read_parquet(OBJECT_FEATS)
+        logger.info(f"  Object: {obj.shape[1]-1} COCO class counts for {len(obj):,} points")
+        df = df.merge(obj, on="point_id", how="left")
+    else:
+        logger.warning("Object detection features not found — run run_object_detection.py first")
+
     # Resolve _x/_y columns
     for col in [c[:-2] for c in df.columns if c.endswith("_x")]:
         if f"{col}_x" in df.columns and f"{col}_y" in df.columns:
@@ -222,6 +307,9 @@ def main() -> None:
             df = df.drop(columns=[f"{col}_x", f"{col}_y"])
 
     logger.info(f"  Merged: {len(df):,} points")
+
+    # ── 1b. Scene diversity indices (derived from Places365 probs) ───────
+    df = add_scene_diversity(df)
 
     # ── 2. Build SLFVI ────────────────────────────────────────────────────
     df = build_slfvi(df)
@@ -243,6 +331,29 @@ def main() -> None:
         logger.info(f"  Added {min(30, len(sa_cols))} scene attributes")
     if "env_outdoor" in df.columns:
         feature_cols.append("env_outdoor")
+
+    # Scene diversity indices (derived from Places365)
+    div_cols = [c for c in SCENE_DIVERSITY_COLS if c in df.columns]
+    if div_cols:
+        feature_cols += div_cols
+        logger.info(f"  Added {len(div_cols)} scene diversity indices")
+
+    # Pixel features (9 low-level statistics)
+    pix_cols = [c for c in [
+        "mean_r", "mean_g", "mean_b", "mean_h", "mean_s", "mean_v",
+        "contrast", "green_ratio", "sky_ratio",
+    ] if c in df.columns]
+    if pix_cols:
+        feature_cols += pix_cols
+        logger.info(f"  Added {len(pix_cols)} pixel features")
+
+    # Object detection: top 32 most variable COCO classes (parallels Cities paper)
+    obj_cols_all = [c for c in df.columns if c.startswith("obj_")]
+    if obj_cols_all:
+        variance = df[obj_cols_all].var()
+        top_obj  = variance.nlargest(32).index.tolist()
+        feature_cols += top_obj
+        logger.info(f"  Added {len(top_obj)} object detection features (top-32 by variance)")
 
     available = [c for c in feature_cols if c in df.columns]
     missing   = [c for c in feature_cols if c not in df.columns]
