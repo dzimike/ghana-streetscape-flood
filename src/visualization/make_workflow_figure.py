@@ -1,4 +1,4 @@
-"""Generate Figure 1: seven-stage methodological workflow.
+"""Generate Figure 1 for Paper 1: SLFVI methodological workflow.
 
 Output: outputs/figures/fig1_workflow.png
 """
@@ -15,12 +15,19 @@ OUT  = ROOT / "outputs/figures/fig1_workflow.png"
 
 C_PROC  = "#2166ac"
 C_DATA  = "#f2f2f2"
-C_INPUT = "#d4e9f7"
-C_OUT   = "#1a9641"
-C_STAGE = "#762a83"
+C_INPUT = "#d1e5f0"
+C_OUT   = "#762a83"
 C_ARROW = "#555555"
 C_LT    = "white"
 C_DK    = "#1a1a1a"
+C_STAGE = "#762a83"
+
+plt.rcParams.update({
+    "font.family": "sans-serif",
+    "font.size": 8.5,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+})
 
 
 def _tc(fill):
@@ -50,7 +57,7 @@ def box(ax, cx, cy, w, h, line1, line2=None, fill=C_DATA, rounded=False, fs=8.5)
 
 
 def badge(ax, cx, cy, n):
-    ax.text(cx, cy, f"Stage {n}", ha="center", va="center",
+    ax.text(cx, cy, f"S{n}", ha="center", va="center",
             fontsize=6.5, color="white", fontweight="bold", zorder=5,
             bbox=dict(boxstyle="round,pad=0.22", facecolor=C_STAGE, edgecolor="none"))
 
@@ -64,7 +71,6 @@ def _hline(ax, x1, x2, y):
 
 
 def _arrowhead_down(ax, x, y_from, y_to):
-    """Vertical line from y_from to just above y_to, then annotate arrowhead."""
     _vline(ax, x, y_from, y_to + 0.015)
     ax.annotate("", xy=(x, y_to), xytext=(x, y_to + 0.015), zorder=2,
                 arrowprops=dict(arrowstyle="-|>", color=C_ARROW, lw=1.4,
@@ -72,13 +78,11 @@ def _arrowhead_down(ax, x, y_from, y_to):
 
 
 def arrow(ax, x1, y1, x2, y2):
-    """Straight arrow (any direction)."""
     ax.annotate("", xy=(x2, y2), xytext=(x1, y1), zorder=2,
                 arrowprops=dict(arrowstyle="-|>", color=C_ARROW, lw=1.4, mutation_scale=11))
 
 
 def split(ax, x, y_src, xl, xr, y_dst, ymid=None):
-    """One source → horizontal bar → two arrows to branch boxes."""
     if ymid is None:
         ymid = (y_src + y_dst) / 2
     _vline(ax, x, y_src, ymid)
@@ -88,13 +92,24 @@ def split(ax, x, y_src, xl, xr, y_dst, ymid=None):
 
 
 def merge(ax, xl, xr, y_src, x, y_dst, ymid=None):
-    """Two branch bottoms → horizontal bar → one arrow to target."""
     if ymid is None:
         ymid = (y_src + y_dst) / 2
     _vline(ax, xl, y_src, ymid)
     _vline(ax, xr, y_src, ymid)
     _hline(ax, xl, xr, ymid)
     _arrowhead_down(ax, x, ymid, y_dst)
+
+
+def phase_band(ax, label, y_bot, y_top, bg="#e8f4fd", tc="#1a5276"):
+    ax.add_patch(FancyBboxPatch(
+        (0.06, y_bot), 11.38, y_top - y_bot,
+        boxstyle="round,pad=0.05",
+        facecolor=bg, edgecolor="#cccccc", linewidth=0.6,
+        alpha=0.38, zorder=0,
+    ))
+    ax.text(0.33, (y_bot + y_top) / 2, label,
+            ha="center", va="center", fontsize=5.8, fontweight="bold",
+            color=tc, rotation=90, zorder=1, alpha=0.85)
 
 
 # ── Canvas ────────────────────────────────────────────────────────────────────
@@ -104,17 +119,24 @@ ax.set_xlim(0, 11.5)
 ax.set_ylim(0, 16)
 ax.axis("off")
 
-CX  = 5.0    # centre x of main column
-WM  = 5.8    # main box width
-H   = 0.62   # standard box height
-HS  = 0.52   # small box height
-WB  = 2.3    # branch box width
-XL  = 2.85   # left branch x
-XR  = 7.15   # right branch x
+CX  = 5.0
+WM  = 5.8
+H   = 0.62
+HS  = 0.52
+WB  = 2.3
+XL  = 2.85
+XR  = 7.15
+
+# ── Phase background bands ────────────────────────────────────────────────────
+phase_band(ax, "DATA\nACQUISITION",    11.90, 15.35, "#e3f2fd", "#1565c0")
+phase_band(ax, "AI FEATURE\nEXTRACTION", 6.60, 11.85, "#fff8e1", "#7b5900")
+phase_band(ax, "GEOSPATIAL FUSION\n& SLFVI OUTPUT", 1.50, 6.55, "#f3e5f5", "#4a148c")
 
 # ── Title ─────────────────────────────────────────────────────────────────────
 ax.text(CX, 15.72, "Figure 1. Methodological Workflow",
         ha="center", va="center", fontsize=12, fontweight="bold", color=C_DK)
+ax.text(CX, 15.44, "Street-Level Flood Vulnerability Index (SLFVI) · Greater Accra, Ghana",
+        ha="center", va="center", fontsize=8.5, color="#444444", fontstyle="italic")
 
 # ── External inputs ───────────────────────────────────────────────────────────
 y_in = 14.95
@@ -157,17 +179,17 @@ box(ax, XR, y4, WB, H, "Mapillary\nGap Query",                   fill=C_PROC, ro
 y5 = 9.32
 merge(ax, XL, XR, y4 - H/2, CX, y5 + H/2, ymid=9.77)
 box(ax, CX, y5, WM, H,
-    "Stage 3 — Annotation & Hybrid Dataset Construction",
-    "400 human-labelled + 1,600 pseudo-labelled · 15 binary flood-indicator labels",
+    "Stage 3 — Annotation & Benchmark Dataset",
+    "400 images labelled · 15 binary indicators · Fleiss κ=0.51 · benchmark validation only",
     fill=C_PROC, rounded=True)
 badge(ax, CX - WM/2 - 0.52, y5, 3)
 
-# ── Stage 4: EfficientNet ────────────────────────────────────────────────────
+# ── Stage 4: Five-Component CLIP Pipeline ─────────────────────────────────────
 y6 = 8.1
 arrow(ax, CX, y5 - H/2, CX, y6 + H/2)
 box(ax, CX, y6, WM, H,
-    "Stage 4 — EfficientNet-B0 Training & Inference",
-    "Fine-tuned on hybrid dataset · inference over 15,934 images · 15 label probabilities",
+    "Stage 4 — Five-Component Zero-Shot Feature Extraction",
+    "CLIP ViT-B/32 · SegFormer-B0 ADE20K · Places365 WRN-18 · YOLOv8n COCO · pixel stats → 153 features",
     fill=C_PROC, rounded=True)
 badge(ax, CX - WM/2 - 0.52, y6, 4)
 
@@ -175,20 +197,18 @@ badge(ax, CX - WM/2 - 0.52, y6, 4)
 y7 = 7.02
 arrow(ax, CX, y6 - H/2, CX, y7 + HS/2)
 box(ax, CX, y7, WM, HS,
-    "Streetscape Features per Road Segment  (26 columns)",
+    "Streetscape Features per Road Segment  (15 CLIP scores · 4 headings aggregated)",
     fill=C_DATA, fs=8)
 
-# ── Stage 5: Terrain / exposure (side box, clear of main column) ──────────────
-S5X   = 9.55   # centre x — well clear of main column right edge (7.9)
-S5W   = 2.6    # width  — right edge at 9.55+1.3 = 10.85, fits within 11.5
-S5H   = 0.72   # height — matches streetscape row comfortably
+# ── Stage 5: Terrain / exposure (side box) ────────────────────────────────────
+S5X   = 9.55
+S5W   = 2.6
+S5H   = 0.72
 box(ax, S5X, y7, S5W, S5H,
     "Terrain · Hydrology ·\nExposure Features",
     "DEM · MERIT Hydro · WorldPop\nOSM buildings · GHSL",
     fill=C_PROC, rounded=True, fs=7.4)
-# Badge sits above the Stage 5 box, not overlapping it
 badge(ax, S5X, y7 + S5H/2 + 0.21, 5)
-# Horizontal arrow: Stage 5 left edge → Streetscape features right edge
 arrow(ax, S5X - S5W/2, y7, CX + WM/2, y7)
 
 # ── Stage 6: LightGBM fusion ─────────────────────────────────────────────────
@@ -196,7 +216,7 @@ y8 = 5.85
 arrow(ax, CX, y7 - HS/2, CX, y8 + H/2)
 box(ax, CX, y8, WM, H,
     "Stage 6 — LightGBM Fusion Model",
-    "34 features · spatial block 5-fold CV · Random Forest & XGBoost comparison",
+    "34 features · spatial block 5-fold CV · ROC-AUC 0.988 · F1 0.758",
     fill=C_PROC, rounded=True)
 badge(ax, CX - WM/2 - 0.52, y8, 6)
 

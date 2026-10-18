@@ -13,13 +13,20 @@ from matplotlib.patches import FancyBboxPatch
 ROOT = Path(__file__).resolve().parents[2]
 OUT  = ROOT / "outputs/figures/fig1_paper3_workflow.png"
 
-C_PROC  = "#d6604d"   # red-orange for typology paper
+C_PROC  = "#d6604d"
 C_DATA  = "#f2f2f2"
 C_INPUT = "#fddbc7"
 C_OUT   = "#762a83"
 C_ARROW = "#555555"
 C_LT    = "white"
 C_DK    = "#1a1a1a"
+
+plt.rcParams.update({
+    "font.family": "sans-serif",
+    "font.size": 8.5,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+})
 
 
 def _tc(fill):
@@ -92,6 +99,18 @@ def merge(ax, xl, xr, y_src, x, y_dst, ymid=None):
     _arrowhead_down(ax, x, ymid, y_dst)
 
 
+def phase_band(ax, label, y_bot, y_top, bg="#e8f4fd", tc="#1a5276"):
+    ax.add_patch(FancyBboxPatch(
+        (0.06, y_bot), 11.38, y_top - y_bot,
+        boxstyle="round,pad=0.05",
+        facecolor=bg, edgecolor="#cccccc", linewidth=0.6,
+        alpha=0.38, zorder=0,
+    ))
+    ax.text(0.33, (y_bot + y_top) / 2, label,
+            ha="center", va="center", fontsize=5.8, fontweight="bold",
+            color=tc, rotation=90, zorder=1, alpha=0.85)
+
+
 # ── Canvas ─────────────────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(11.5, 15))
 fig.patch.set_facecolor("white")
@@ -107,10 +126,21 @@ WB  = 2.3
 XL  = 2.85
 XR  = 7.15
 
+# ── Phase background bands ────────────────────────────────────────────────────
+phase_band(ax, "FEATURE\nPREPARATION",      9.95, 14.55, "#fbe9e7", "#bf360c")
+phase_band(ax, "TYPOLOGY\nCONSTRUCTION",   6.70, 9.90,  "#fff8e1", "#7b5900")
+phase_band(ax, "SPATIAL ANALYSIS\n& POLICY", 3.35, 6.65, "#f3e5f5", "#4a148c")
+
+# ── Title ──────────────────────────────────────────────────────────────────────
+ax.text(CX, 14.76, "Figure 1. Methodological Workflow",
+        ha="center", va="center", fontsize=12, fontweight="bold", color=C_DK)
+ax.text(CX, 14.62, "CLIP-Based Streetscape Archetype Discovery · Greater Accra, Ghana",
+        ha="center", va="center", fontsize=8.0, color="#444444", fontstyle="italic")
+
 # ── External input ─────────────────────────────────────────────────────────────
 y_in = 14.25
 box(ax, CX, y_in, WM, HS,
-    "EfficientNet-B0 Predictions  (15,934 images · 15 flood-indicator labels)",
+    "CLIP Zero-Shot Features  (3,836 road segments · 15 flood-indicator labels)",
     fill=C_INPUT, fs=8)
 
 # ── Stage 1: Segment aggregation ──────────────────────────────────────────────
@@ -143,15 +173,15 @@ badge(ax, CX - WM/2 - 0.52, y3, "S3")
 # ── Split: k=2 optimal vs k=6 chosen ─────────────────────────────────────────
 y4 = 9.3
 split(ax, CX, y3 - H/2, XL, XR, y4 + HS/2, ymid=9.72)
-box(ax, XL, y4, WB, HS, "k=2 optimal\n(silhouette 0.3081)", fill=C_DATA, fs=8)
-box(ax, XR, y4, WB, HS, "k=6 chosen\n(silhouette 0.2301)", fill=C_DATA, fs=8)
+box(ax, XL, y4, WB, HS, "k=2 optimal\n(silhouette 0.2799)", fill=C_DATA, fs=8)
+box(ax, XR, y4, WB, HS, "k=6 chosen\n(silhouette 0.1679)", fill=C_DATA, fs=8)
 
 # ── Merge into Stage 4 ────────────────────────────────────────────────────────
 y5 = 8.18
 merge(ax, XL, XR, y4 - HS/2, CX, y5 + H/2, ymid=8.62)
 box(ax, CX, y5, WM, H,
     "Stage 4 — Six-Archetype k-means Typology (k = 6)",
-    "n_init=50 · 6 archetypes ranging from vuln_prob 0.734 to 0.150",
+    "n_init=50 · k=6 archetypes · sensitivity score range 0.687 (Type I) to 0.244 (Type VI)",
     fill=C_PROC, rounded=True)
 badge(ax, CX - WM/2 - 0.52, y5, "S4")
 
@@ -159,7 +189,7 @@ badge(ax, CX - WM/2 - 0.52, y5, "S4")
 y6 = 7.08
 arrow(ax, CX, y5 - H/2, CX, y6 + HS/2)
 box(ax, CX, y6, WM, HS,
-    "6 Archetype Mean Profiles  (15-label probability vectors + silhouette per point)",
+    "6 Archetype Mean Profiles  (15 CLIP scores · sensitivity scores 0.244–0.687)",
     fill=C_DATA, fs=8)
 
 # ── Stage 5: Spatial mapping ──────────────────────────────────────────────────

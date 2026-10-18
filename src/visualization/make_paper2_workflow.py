@@ -13,13 +13,20 @@ from matplotlib.patches import FancyBboxPatch
 ROOT = Path(__file__).resolve().parents[2]
 OUT  = ROOT / "outputs/figures/fig1_paper2_workflow.png"
 
-C_PROC  = "#1b7837"   # green for this paper (coverage theme)
+C_PROC  = "#1b7837"
 C_DATA  = "#f2f2f2"
 C_INPUT = "#d4edda"
 C_OUT   = "#762a83"
 C_ARROW = "#555555"
 C_LT    = "white"
 C_DK    = "#1a1a1a"
+
+plt.rcParams.update({
+    "font.family": "sans-serif",
+    "font.size": 8.5,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+})
 
 
 def _tc(fill):
@@ -92,6 +99,18 @@ def merge(ax, xl, xr, y_src, x, y_dst, ymid=None):
     _arrowhead_down(ax, x, ymid, y_dst)
 
 
+def phase_band(ax, label, y_bot, y_top, bg="#e8f4fd", tc="#1a5276"):
+    ax.add_patch(FancyBboxPatch(
+        (0.06, y_bot), 11.38, y_top - y_bot,
+        boxstyle="round,pad=0.05",
+        facecolor=bg, edgecolor="#cccccc", linewidth=0.6,
+        alpha=0.38, zorder=0,
+    ))
+    ax.text(0.33, (y_bot + y_top) / 2, label,
+            ha="center", va="center", fontsize=5.8, fontweight="bold",
+            color=tc, rotation=90, zorder=1, alpha=0.85)
+
+
 # ── Canvas ─────────────────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(11.5, 14))
 fig.patch.set_facecolor("white")
@@ -107,7 +126,17 @@ WB  = 2.3
 XL  = 2.85
 XR  = 7.15
 
+# ── Phase background bands ────────────────────────────────────────────────────
+phase_band(ax, "COVERAGE\nASSESSMENT",    8.90, 13.55, "#e8f5e9", "#1b5e20")
+phase_band(ax, "GAP BIAS\nANALYSIS",      5.75, 8.85,  "#fff8e1", "#7b5900")
+phase_band(ax, "IMPUTATION &\nADJUSTED OUTPUTS", 2.50, 5.70, "#f3e5f5", "#4a148c")
+
 # ── Title ──────────────────────────────────────────────────────────────────────
+ax.text(5.0, 13.75, "Figure 1. Methodological Workflow",
+        ha="center", va="center", fontsize=12, fontweight="bold", color=C_DK)
+ax.text(5.0, 13.60, "Street-Level Data Voids and Flood Vulnerability Inequality · Greater Accra, Ghana",
+        ha="center", va="center", fontsize=8.0, color="#444444", fontstyle="italic")
+
 # ── External inputs ────────────────────────────────────────────────────────────
 y_in = 13.25
 box(ax, 2.8, y_in, 2.3, HS, "OSM Roads\nFlood strata (DEM)", fill=C_INPUT, fs=7.8)
@@ -149,10 +178,10 @@ box(ax, XR, y4, WB, H, "Spatial property\ncomparison", fill=C_PROC, rounded=True
 y4b = 7.38
 arrow(ax, XL, y4 - H/2, XL, y4b + HS/2)
 arrow(ax, XR, y4 - H/2, XR, y4b + HS/2)
-box(ax, XL, y4b, WB, HS, "Logistic regression\nchi-square (χ²=276.6, p<0.001)", fill=C_DATA, fs=7.2)
-box(ax, XR, y4b, WB, HS, "Elevation · dist_waterway\nbuilding density · Cohen's d", fill=C_DATA, fs=7.2)
+box(ax, XL, y4b, WB, HS, "Logistic regression\nχ²=276.6, p<0.001", fill=C_DATA, fs=7.2)
+box(ax, XR, y4b, WB, HS, "Elevation · dist_waterway\nbuilding density · Cohen's d=0.317", fill=C_DATA, fs=7.2)
 
-# ── Merge into Stage 4 ────────────────────────────────────────────────────────
+# ── Merge into Stage 3 ────────────────────────────────────────────────────────
 y5 = 6.28
 merge(ax, XL, XR, y4b - HS/2, CX, y5 + H/2, ymid=6.75)
 box(ax, CX, y5, WM, H,
