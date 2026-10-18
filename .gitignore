@@ -33,6 +33,10 @@ outputs/
 # Claude Code session files
 .claude/
 
+# Project pipeline instructions and manuscripts (kept local only)
+CLAUDE.md
+manuscripts/
+
 # Notebooks
 .ipynb_checkpoints/
 
